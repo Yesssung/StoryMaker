@@ -1,0 +1,2 @@
+
+The system will randomly decide whether to survive or escape the alien invasion on Earth. The user must survive.

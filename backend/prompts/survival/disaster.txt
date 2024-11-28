@@ -1,0 +1,3 @@
+The world is currently facing a large-scale disaster, such as an earthquake, tsunami, or pandemic. The player must attempt to survive amidst the chaos, and their choices will impact their chances of survival. After selecting a genre, the system will randomly choose one of the disaster prompts, and the story will unfold based on that scenario.
+
+The dialogue system will begin with a brief explanation of the situation, based on the genre the user selects and a randomly chosen prompt, all from a first-person perspective. The story will unfold based on the user's responses. The system will present three choices, and the user must select one. Based on the user's choice, the system will display the survival probability as a percentage.

@@ -1,0 +1,50 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+node_modules
+
+# Node modules
+node_modules/
+
+# TypeScript 컴파일러가 생성하는 디렉터리 (예: dist, build)
+dist/
+build/
+
+# TypeScript의 출력 파일 (예: .tsbuildinfo 파일)
+*.tsbuildinfo
+
+# npm 로그 파일
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# .env 파일 (환경 변수 파일)
+.env
+
+# 기타 IDE/편집기 설정 파일들 (예: VS Code)
+.vscode/
+.idea/
+
+# OS별로 생성되는 파일들 (예: macOS의 .DS_Store)
+.DS_Store
+
