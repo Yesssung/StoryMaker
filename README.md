@@ -37,23 +37,26 @@ LangChain의 **Conversation** 모듈은 대화형 AI 애플리케이션을 구�
 
 ## 설치 및 실행
 
-1. 필요한 패키지 설치
+**1.필요한 패키지 설치**
 
-```bash
+```
 # 백엔드
-`pip install -r requirements.txt`
+pip install -r requirements.txt
 
 # 프론트엔드
-`npm install`
+npm install
+```
 
-2. **실행 방법**
+**2. 실행 방법**
+```
 # 백엔드 실행
-`uvicorn app.main:app --reload`
+uvicorn app.main:app --reload
 
 # 프론트엔드 실행
-`npm start`
+npm start
+```
 
-3. 프로젝트 실행 흐름
+**3. 프로젝트 실행 흐름**
 
 - 프론트엔드에서 사용자가 장르를 선택하고
 - 백엔드에서 이를 처리한 후
@@ -62,5 +65,5 @@ LangChain의 **Conversation** 모듈은 대화형 AI 애플리케이션을 구�
 - 사용자와 상호작용을 이어갑니다.
 
 
-4. License
+**4. License**
 이 프로젝트는 MIT 라이선스 하에 제공됩니다.
