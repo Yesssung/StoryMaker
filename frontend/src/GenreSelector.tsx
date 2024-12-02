@@ -10,6 +10,9 @@ const GenreSelector: React.FC<GenreSelectorProps> = ({ onPromptReceived }) => {
   // 프론트엔드에서 요청 보내기 (GenreSelector.tsx)
   const handleGenreSelect = async (genre: string) => {
     try {
+      console.log("[DEBUG] Selected genre:", genre);
+
+      // Fetch prompt
       const response = await fetch("http://localhost:8000/get-prompt", {
         method: "POST",
         headers: {
@@ -24,7 +27,9 @@ const GenreSelector: React.FC<GenreSelectorProps> = ({ onPromptReceived }) => {
 
       const data = await response.json();
       const prompt = data.prompt;
+      console.log("[DEBUG] Fetched prompt:", prompt);
 
+      // Fetch generated world
       const generateResponse = await fetch(
         "http://localhost:8000/generate-world",
         {
@@ -41,9 +46,17 @@ const GenreSelector: React.FC<GenreSelectorProps> = ({ onPromptReceived }) => {
       }
 
       const generatedData = await generateResponse.json();
+      console.log("[DEBUG] Generated world content:", generatedData.content);
+
+      // Call onPromptReceived to handle success
       onPromptReceived(generatedData.content, genre);
     } catch (error) {
-      console.error("Error fetching prompt or generating world:", error);
+      console.error(
+        "[ERROR] Fetching prompt or generating world failed:",
+        error
+      );
+
+      // Call onPromptReceived with error fallback
       onPromptReceived("프롬프트를 불러오는 데 실패했습니다.", genre);
     }
   };

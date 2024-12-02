@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 interface Message {
   role: string;
@@ -13,14 +13,25 @@ interface ChatProps {
 const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
   const [input, setInput] = useState("");
 
+  // 생성된 세계관을 초기 메시지로 설정
+  useEffect(() => {
+    if (messages.length === 0) {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          role: "assistant",
+          content: "세계관이 생성되었습니다! 이곳은 재난의 중심입니다...",
+        },
+      ]);
+    }
+  }, [messages, setMessages]);
+
   const handleSend = async () => {
     if (input.trim() === "") return;
 
-    // 사용자 메시지 추가
     const userMessage: Message = { role: "user", content: input };
     setMessages((prevMessages) => [...prevMessages, userMessage]);
 
-    // AI와 연결하기 위해 백엔드로 메시지를 전송
     try {
       const response = await fetch(
         `${process.env.REACT_APP_BACKEND_URL}/chat`,
@@ -29,9 +40,7 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            messages: [...messages, userMessage], // 기존 메시지 히스토리와 새로운 메시지 포함
-          }),
+          body: JSON.stringify({ messages: [...messages, userMessage] }),
         }
       );
 
@@ -40,8 +49,6 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
       }
 
       const data = await response.json();
-
-      // AI 응답 추가
       const aiResponse: Message = { role: "assistant", content: data.response };
       setMessages((prevMessages) => [...prevMessages, aiResponse]);
     } catch (error) {
@@ -53,7 +60,6 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
       setMessages((prevMessages) => [...prevMessages, errorMessage]);
     }
 
-    // 입력 필드 초기화
     setInput("");
   };
 
@@ -70,7 +76,7 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
                 : "bg-gray-200 self-start"
             }`}
           >
-            {msg.content} {/* 채팅창 들어가자마자 프롬프트 출력되는 곳 */}
+            {msg.content}
           </div>
         ))}
       </div>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
@@ -6,22 +6,43 @@ import os
 import random
 from dotenv import load_dotenv
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain
+from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
-from langchain.llms import OpenAI
-from langchain.tools import Tool
+from langchain_community.llms import OpenAI
+from langchain_community.chat_models import ChatOpenAI
 
 # Load environment variables
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
-# LangChain 구성
-llm = OpenAI(model_name="gpt-4", openai_api_key=openai_api_key)
-memory = ConversationBufferMemory()
+# FastAPI 앱 설정
+app = FastAPI()
 
-# 대화 체인 (히스토리 유지)
-conversation_chain = ConversationChain(llm=llm, memory=memory)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # 현재 파일의 디렉토리 경로
+PROMPT_BASE_PATH = os.path.join(BASE_DIR, "prompts")  # prompts 폴더 절대 경로
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 프론트엔드 URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# LangChain 구성
+llm = ChatOpenAI(temperature=0.4, model="gpt-4", openai_api_key=openai_api_key)
+memory = ConversationBufferMemory(return_messages=True)
+
+# 히스토리 함수 정의
+def get_session_history(session_id: str):
+    return memory.chat_memory.messages
+
+# RunnableWithMessageHistory 초기화
+conversation_chain = RunnableWithMessageHistory(
+    runnable=llm,
+    get_session_history=get_session_history
+)
 
 # 단일 프롬프트 체인 (세계관 생성 등 단일 작업에 사용)
 prompt_template = PromptTemplate(
@@ -41,20 +62,6 @@ prompt_template = PromptTemplate(
 )
 chain = LLMChain(llm=llm, prompt=prompt_template)
 
-# FastAPI 앱 설정
-app = FastAPI()
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # 현재 파일의 디렉토리 경로
-PROMPT_BASE_PATH = os.path.join(BASE_DIR, "prompts")  # prompts 폴더 절대 경로
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # 프론트엔드 URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Request/Response 모델 정의
 class Message(BaseModel):
     role: str  # "system", "user", "assistant"
@@ -73,53 +80,25 @@ class GenerateWorldRequest(BaseModel):
     genre: str
     prompt: str
 
+# 프롬프트 파일 읽기 함수 통합
+def read_random_prompt(genre: str) -> str:
+    genre_path = os.path.join(PROMPT_BASE_PATH, genre)
 
-
-
-# 장르별 랜덤 프롬프트 선택 함수
-
-def get_random_prompt_tool(genre: str) -> str:
-    print(f'genre: {genre}')
-    genre_path = os.path.join(PROMPT_BASE_PATH, genre)  # 절대 경로 사용
-    print(f"[DEBUG] Looking for prompts in: {genre_path}")
-
-    # 폴더가 존재하지 않을 경우 예외 발생
     if not os.path.exists(genre_path):
-        print(f"[ERROR] Genre folder not found: {genre_path}")
         raise HTTPException(status_code=404, detail=f"Genre folder '{genre}' not found.")
-    print(f'장르 선택 됐니?: {genre}')
-    
-    # 해당 폴더 내 모든 텍스트 파일 검색
-    txt_files = [f for f in os.listdir(genre_path) if f.endswith(".txt")]
-    print(f"[DEBUG] Found files: {txt_files}")
 
-    # 텍스트 파일이 없을 경우 예외 발생
+    txt_files = [f for f in os.listdir(genre_path) if f.endswith(".txt")]
     if not txt_files:
-        print(f"[ERROR] No prompt files in folder: {genre_path}")
         raise HTTPException(status_code=404, detail=f"No prompt files found in genre folder '{genre}'.")
 
-    # 랜덤으로 하나의 파일 선택
     random_file = random.choice(txt_files)
     file_path = os.path.join(genre_path, random_file)
-    print(f"[DEBUG] Selected file: {random_file}")
 
-    # 파일 읽기
     try:
         with open(file_path, "r", encoding="utf-8") as file:
-            content = file.read()
-        print(f"[DEBUG] File content read successfully: {content[:50]}...")  # 처음 50자만 출력
-        return content
+            return file.read()
     except Exception as e:
-        print(f"[ERROR] Error reading file {file_path}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {random_file}")
-
-
-
-prompt_tool = Tool(
-    name="RandomPrompt",
-    func=get_random_prompt_tool,
-    description="Retrieve a random prompt for the given genre."
-)
+        raise HTTPException(status_code=500, detail=f"Failed to read prompt file: {e}")
 
 # 엔드포인트 정의
 @app.post("/chat", response_model=ChatResponse)
@@ -128,82 +107,30 @@ async def chat(request: ChatRequest):
     대화 메시지를 처리하여 응답을 반환합니다.
     """
     try:
-        print(f"[DEBUG] Received chat request: {request.messages}")
         user_message = request.messages[-1].content  # 마지막 메시지
-        print(f"[DEBUG] User message: {user_message}")
-
-        # LangChain ConversationChain 실행
-        response = conversation_chain.run(user_message)
-        print(f"[DEBUG] LangChain response: {response}")
-
+        response = conversation_chain.invoke({"session_id": "session_id", "input": user_message})
         return ChatResponse(response=response)
     except Exception as e:
-        print(f"[ERROR] Error in /chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise HTTPException(status_code=500, detail=f"Error in /chat: {e}")
 
 @app.post("/get-prompt")
 async def get_prompt(request: GenreRequest):
-    genre = request.genre
-    # 유효한 폴더 경로 계산
-    genre_path = os.path.join(PROMPT_BASE_PATH, genre)
-    print(f"[DEBUG] Looking for prompts in: {genre_path}")
-
-    # 폴더가 존재하지 않을 경우 예외 발생
-    if not os.path.exists(genre_path):
-        print(f"[ERROR] Genre folder not found: {genre_path}")
-        raise HTTPException(status_code=404, detail=f"Genre folder '{genre}' not found.")
-
-    # 텍스트 파일 검색
-    txt_files = [f for f in os.listdir(genre_path) if f.endswith(".txt")]
-    if not txt_files:
-        print(f"[ERROR] No prompt files found in folder: {genre_path}")
-        raise HTTPException(status_code=404, detail=f"No prompt files found in genre folder '{genre}'.")
-
-    # 랜덤 파일 선택
-    random_file = random.choice(txt_files)
-    file_path = os.path.join(genre_path, random_file)
-    print(f"[DEBUG] Selected file: {file_path}")
-
-    # 파일 내용 읽기
+    """
+    장르별 랜덤 프롬프트를 반환합니다.
+    """
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            content = file.read()
-        return {"genre": genre, "prompt": content}
+        content = read_random_prompt(request.genre)
+        return {"genre": request.genre, "prompt": content}
     except Exception as e:
-        print(f"[ERROR] Error reading file {file_path}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {random_file}")
-    
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/generate-world")
-async def generate_world(request: GenreRequest):
-    print(f"[DEBUG] Received genre: {request.genre}")
-    genre = request.genre
-
-    # genre에 따른 프롬프트 생성 또는 불러오기
-    genre_path = os.path.join(PROMPT_BASE_PATH, genre)
-    if not os.path.exists(genre_path):
-        raise HTTPException(status_code=404, detail=f"Genre folder '{genre}' not found.")
-    
-    # 랜덤 프롬프트 파일 선택
-    txt_files = [f for f in os.listdir(genre_path) if f.endswith(".txt")]
-    if not txt_files:
-        raise HTTPException(status_code=404, detail=f"No prompt files found for genre '{genre}'.")
-
-    random_file = random.choice(txt_files)
-    file_path = os.path.join(genre_path, random_file)
-
-    # 프롬프트 내용 읽기
+async def generate_world(request: GenerateWorldRequest):
+    """
+    장르와 프롬프트를 기반으로 새로운 게임 세계관을 생성합니다.
+    """
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            prompt = file.read()
-        print(f"[DEBUG] Selected prompt: {prompt[:50]}...")  # 첫 50자 출력
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read prompt file for genre '{genre}'.")
-
-    # 처리 로직 실행
-    try:
-        response_content = chain.invoke({"genre": genre, "prompt": prompt})
-        print(f"[DEBUG] Generated content: {response_content[:50]}...")  # 첫 50자 출력
+        response_content = chain.run({"genre": request.genre, "prompt": request.prompt})
         return {"content": response_content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to generate world.")
+        raise HTTPException(status_code=500, detail=f"Chain invocation failed: {e}")
