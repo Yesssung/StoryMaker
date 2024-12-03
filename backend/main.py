@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 # LangChain 구성
-llm = ChatOpenAI(temperature=0.4, model="gpt-4", openai_api_key=openai_api_key)
+llm = ChatOpenAI(temperature=0.4, model="gpt-4o-mini", openai_api_key=openai_api_key)
 memory = ConversationBufferMemory(return_messages=True)
 
 # 히스토리 함수 정의
@@ -41,7 +41,7 @@ def get_session_history(session_id: str):
 # RunnableWithMessageHistory 초기화
 conversation_chain = RunnableWithMessageHistory(
     runnable=llm,
-    get_session_history=get_session_history
+    get_session_history=lambda session_id: memory.chat_memory.messages  # 메모리에서 히스토리 반환
 )
 
 # 단일 프롬프트 체인 (세계관 생성 등 단일 작업에 사용)
@@ -71,7 +71,8 @@ class ChatRequest(BaseModel):
     messages: List[Message]
 
 class ChatResponse(BaseModel):
-    response: str
+    role: str
+    content: str
 
 class GenreRequest(BaseModel):
     genre: str
@@ -103,21 +104,35 @@ def read_random_prompt(genre: str) -> str:
 # 엔드포인트 정의
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    대화 메시지를 처리하여 응답을 반환합니다.
-    """
     try:
-        user_message = request.messages[-1].content  # 마지막 메시지
-        response = conversation_chain.invoke({"session_id": "session_id", "input": user_message})
-        return ChatResponse(response=response)
+        # 유저 메시지 추가
+        user_message = request.messages[-1]
+        memory.chat_memory.add_message({"role": user_message.role, "content": user_message.content})
+        print(f"[DEBUG] Updated chat memory: {memory.chat_memory.messages}")
+
+        # OpenAI 형식으로 변환
+        messages = [{"role": msg["role"], "content": msg["content"]} for msg in memory.chat_memory.messages]
+        print(f"[DEBUG] Messages sent to LLM: {messages}")
+
+        # LLM 호출: 히스토리 기반으로 새로운 대화 생성
+        response = llm.generate(messages=messages)
+        ai_message = response["choices"][0]["message"]["content"]
+        print(f"[DEBUG] AI Generated Response: {ai_message}")
+
+        # AI 응답을 메모리에 추가
+        memory.chat_memory.add_message({"role": "assistant", "content": ai_message})
+        print(f"[DEBUG] Memory after AI Response: {memory.chat_memory.messages}")
+
+        # 클라이언트에 AI의 응답 반환
+        return ChatResponse(role="assistant", content=ai_message)
+
     except Exception as e:
+        print(f"[ERROR] Error in /chat: {e}")
         raise HTTPException(status_code=500, detail=f"Error in /chat: {e}")
 
 @app.post("/get-prompt")
 async def get_prompt(request: GenreRequest):
-    """
-    장르별 랜덤 프롬프트를 반환합니다.
-    """
+
     try:
         content = read_random_prompt(request.genre)
         return {"genre": request.genre, "prompt": content}
@@ -126,11 +141,16 @@ async def get_prompt(request: GenreRequest):
 
 @app.post("/generate-world")
 async def generate_world(request: GenerateWorldRequest):
-    """
-    장르와 프롬프트를 기반으로 새로운 게임 세계관을 생성합니다.
-    """
     try:
+        # 세계관 생성
         response_content = chain.run({"genre": request.genre, "prompt": request.prompt})
+        print(f"[DEBUG] Generated world content: {response_content}")
+
+        # 초기 세계관을 메모리에 추가
+        memory.chat_memory.add_message({"role": "system", "content": response_content})
+        print(f"[DEBUG] World content added to memory")
+
         return {"content": response_content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chain invocation failed: {e}")
+        print(f"[ERROR] Error in /generate-world: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating world: {e}")
