@@ -29,10 +29,12 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
   const handleSend = async () => {
     if (input.trim() === "") return;
 
+    // 사용자 메시지 추가
     const userMessage: Message = { role: "user", content: input };
     setMessages((prevMessages) => [...prevMessages, userMessage]);
 
     try {
+      // API 호출
       const response = await fetch(
         `${process.env.REACT_APP_BACKEND_URL}/chat`,
         {
@@ -49,8 +51,10 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
       }
 
       const data = await response.json();
-      const aiResponse: Message = { role: "assistant", content: data.response };
-      setMessages((prevMessages) => [...prevMessages, aiResponse]);
+
+      // AI 응답 추가
+      const aiMessage: Message = { role: "assistant", content: data.content };
+      setMessages((prevMessages) => [...prevMessages, aiMessage]);
     } catch (error) {
       console.error("Error fetching AI response:", error);
       const errorMessage: Message = {
@@ -60,6 +64,7 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
       setMessages((prevMessages) => [...prevMessages, errorMessage]);
     }
 
+    // 입력 필드 초기화
     setInput("");
   };
 
@@ -76,7 +81,7 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
                 : "bg-gray-200 self-start"
             }`}
           >
-            {msg.content}
+            {msg.content} {/* 메시지 내용 출력 */}
           </div>
         ))}
       </div>

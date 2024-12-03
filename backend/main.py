@@ -112,11 +112,21 @@ async def chat(request: ChatRequest):
 
         # OpenAI 형식으로 변환
         messages = [{"role": msg["role"], "content": msg["content"]} for msg in memory.chat_memory.messages]
+        
+        # 메시지 유효성 검사
+        for msg in messages:
+            if "role" not in msg or "content" not in msg:
+                raise ValueError(f"Invalid message format: {msg}")
+            if msg["role"] not in {"system", "user", "assistant"}:
+                raise ValueError(f"Invalid role: {msg['role']}")
+
         print(f"[DEBUG] Messages sent to LLM: {messages}")
 
-        # LLM 호출: 히스토리 기반으로 새로운 대화 생성
-        response = llm.generate(messages=messages)
-        ai_message = response["choices"][0]["message"]["content"]
+        # LLM 호출: invoke 메서드 사용
+        response = llm.invoke(input=messages)  # invoke 메서드 반환 값은 BaseMessage 객체
+        print(f"[DEBUG] Raw LLM Response: {response}")
+        print(f"[DEBUG] Generated content: {response.content}")
+        ai_message = response.content  # BaseMessage 객체에서 content 추출
         print(f"[DEBUG] AI Generated Response: {ai_message}")
 
         # AI 응답을 메모리에 추가
@@ -127,7 +137,9 @@ async def chat(request: ChatRequest):
         return ChatResponse(role="assistant", content=ai_message)
 
     except Exception as e:
+        import traceback
         print(f"[ERROR] Error in /chat: {e}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error in /chat: {e}")
 
 @app.post("/get-prompt")
@@ -148,7 +160,6 @@ async def generate_world(request: GenerateWorldRequest):
 
         # 초기 세계관을 메모리에 추가
         memory.chat_memory.add_message({"role": "system", "content": response_content})
-        print(f"[DEBUG] World content added to memory")
 
         return {"content": response_content}
     except Exception as e:
